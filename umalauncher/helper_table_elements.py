@@ -343,7 +343,6 @@ class Preset:
 
         table_header = "".join(headers)
         table = [f"<tr>{table_header}</tr>"]
-        logger.debug(f"COMMAND INFO: {command_info}")
         for row in self.initialized_rows:
             if not row.disabled:
                 table.append(row.to_tr(command_info))
@@ -681,7 +680,6 @@ class Preset:
                     )
                 ]
             except Exception as e:
-                logger.error("ERROR:", e)
                 pass
         average_stats = [stat / 3 for stat in average_stats]
         html_output += f"""<tr style='background-color:red'><td>{average_stats[0]}</td><td>{average_stats[1]}</td><td>{average_stats[2]}</td><td>{average_stats[3]}</td><td>{average_stats[4]}</td><td>{average_stats[5]}</td><td>{average_stats[6]}</td></tr>"""
