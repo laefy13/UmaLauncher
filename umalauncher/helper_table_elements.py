@@ -4,6 +4,7 @@ import gui
 import util
 import constants
 import settings_elements as se
+import pandas as pd
 
 TABLE_HEADERS = {
     "fac": "Facility",
@@ -12,20 +13,30 @@ TABLE_HEADERS = {
     "power": "Power",
     "guts": "Guts",
     "wiz": "Wisdom",
-    "ss_match": "SS Match"
+    "ss_match": "SS Match",
 }
 
+
 class Colors(enum.Enum):
-    """Defines the colors used in the helper table.
-    """
+    """Defines the colors used in the helper table."""
+
     ALERT = "red"
     WARNING = "orange"
     GOOD = "lightgreen"
     GREAT = "aqua"
 
 
-class Cell():
-    def __init__(self, value="", bold=False, color=None, background=None, percent=False, title="", style="text-overflow: clip;white-space: nowrap;overflow: hidden;"):
+class Cell:
+    def __init__(
+        self,
+        value="",
+        bold=False,
+        color=None,
+        background=None,
+        percent=False,
+        title="",
+        style="text-overflow: clip;white-space: nowrap;overflow: hidden;",
+    ):
         self.value = value
         self.bold = bold
         self.color = color
@@ -43,16 +54,16 @@ class Cell():
         if self.background:
             style += f"background:{self.background};"
         if style:
-            style = f" style=\"{style}\""
-        
+            style = f' style="{style}"'
+
         title = self.title
         if title:
-            title = title.replace('\n','')
-            title = f" title=\"{title}\""
+            title = title.replace("\n", "")
+            title = f' title="{title}"'
         return f"<td{style if style else ''}{title if title else ''}>{self.value}{'%' if self.percent else ''}</td>"
 
 
-class Row():
+class Row:
     long_name = None
     short_name = None
     description = None
@@ -64,48 +75,48 @@ class Row():
 
     """Defines a row in the helper table.
     """
+
     def __init__(self):
         self.dialog = None
         self.style = None
         self.disabled = False
 
     def _generate_cells(self, command_info) -> list[Cell]:
-        """Returns a list of cells for this row.
-        """
+        """Returns a list of cells for this row."""
         cells = [Cell(self.short_name)]
 
         for command in command_info:
             cells.append(Cell())
-        
+
         return cells
 
     def get_cells(self, command_info) -> list[Cell]:
-        """Returns the value of the row at the given column index.
-        """
+        """Returns the value of the row at the given column index."""
         return self._generate_cells(command_info)
 
     def display_settings_dialog(self, parent):
-        """Displays the settings dialog for this row.
-        """
+        """Displays the settings dialog for this row."""
         settings_var = [self.settings]
-        self.dialog = gui.UmaPresetSettingsDialog(parent, settings_var, window_title="Change row options")
+        self.dialog = gui.UmaPresetSettingsDialog(
+            parent, settings_var, window_title="Change row options"
+        )
         self.dialog.exec()
         self.dialog = None
         self.settings = settings_var[0]
-    
+
     def to_tr(self, command_info):
-        td = ''.join(cell.to_td() for cell in self.get_cells(command_info))
+        td = "".join(cell.to_td() for cell in self.get_cells(command_info))
         return f"<tr{self.get_style()}>{td}</tr>"
-    
+
     def get_style(self):
         if self.style:
-            return f" style=\"{self.style}\""
+            return f' style="{self.style}"'
         return ""
-    
+
     def to_dict(self, row_types):
         return {
             "type": row_types(type(self)).name,
-            "settings": self.settings.to_dict() if self.settings else {}
+            "settings": self.settings.to_dict() if self.settings else {},
         }
 
 
@@ -170,7 +181,7 @@ class PresetSettings(se.NewSettings):
     }
 
 
-class Preset():
+class Preset:
     name = None
     rows = None
     initialized_rows: list[Row] = None
@@ -190,23 +201,25 @@ class Preset():
 
     def __iter__(self):
         return iter(self.initialized_rows)
-    
+
     def __gt__(self, other):
         return self.name > other.name
-    
+
     def __lt__(self, other):
         return self.name < other.name
-    
+
     def __eq__(self, other):
         return self.name == other.name
-    
+
     def display_settings_dialog(self, parent):
         settings_var = [self.settings]
-        self.dialog = gui.UmaPresetSettingsDialog(parent, settings_var, window_title="Toggle elements")
+        self.dialog = gui.UmaPresetSettingsDialog(
+            parent, settings_var, window_title="Toggle elements"
+        )
         self.dialog.exec()
         self.dialog = None
         self.settings = settings_var[0]
-    
+
     def generate_overlay(self, main_info, command_info):
         html_elements = []
 
@@ -221,53 +234,58 @@ class Preset():
 
         if self.settings.fans_enabled.value:
             html_elements.append(self.generate_fans(main_info))
-        
+
         if self.settings.schedule_enabled.value:
             html_elements.append(self.generate_schedule(main_info))
-        
+
         if self.settings.support_bonds.value:
-            html_elements.append(self.generate_bonds(main_info, display_type=self.settings.support_bonds.value))
+            html_elements.append(
+                self.generate_bonds(
+                    main_info, display_type=self.settings.support_bonds.value
+                )
+            )
 
         if self.settings.scenario_specific_enabled.value:
             html_elements.append(self.generate_gm_table(main_info))
             html_elements.append(self.generate_gl_table(main_info))
             html_elements.append(self.generate_arc(main_info))
             html_elements.append(self.generate_uaf(main_info))
+            html_elements.append(self.generate_sharp(main_info))
+            html_elements.append(self.generate_stats_ref(main_info))
 
         html_elements.append(self.generate_table(command_info, main_info))
 
         # html_elements.append("""<button id="btn-skill-window" onclick="window.await_skill_window();">Open Skills Window</button>""")
 
-        return ''.join(html_elements)
+        return "".join(html_elements)
 
     def generate_progress_bar(self, main_info):
 
         sections = constants.DEFAULT_TRAINING_SECTIONS
 
-        if main_info['scenario_id'] == 6:
+        if main_info["scenario_id"] == 6:
             sections = constants.DEFAULT_ARC_SECTIONS
 
         tot_turns = sections[-1][0] - 1
-        turn_len = 100. / tot_turns
-        start_dist = 0.
+        turn_len = 100.0 / tot_turns
+        start_dist = 0.0
         rects = []
 
         for i in range(len(sections)):
             if sections[i][2] == "END":
                 break
-            
-            end_dist = (sections[i+1][0] - 1) * turn_len
+
+            end_dist = (sections[i + 1][0] - 1) * turn_len
 
             cur_rect = f"""<rect x="{start_dist}" y="0" width="{end_dist - start_dist}" height="2" fill="{sections[i][1]}" mask="url(#mask)"/>"""
             rects.append(cur_rect)
 
             start_dist = end_dist
-        
-        rects = ''.join(rects)
 
-        dark_start = main_info['turn'] * turn_len
+        rects = "".join(rects)
+
+        dark_start = main_info["turn"] * turn_len
         dark_rect = f"""<rect x="{dark_start}" y="0" width="{100 - dark_start}" height="2" fill="rgba(0, 0, 0, 0.6)" mask="url(#mask)" />"""
-
 
         bar_svg = f"""
         <svg width="100" height="2" viewBox="0 0 100 2" style="width: 100%; height: auto;">
@@ -280,66 +298,80 @@ class Preset():
         </svg>
         """
 
-        bar_div = f"<div id=\"progress-bar-container\" style=\"width: 100%; padding: 0 1rem; display:flex; align-items: center; gap: 0.5rem;\"><p style=\"white-space: nowrap; margin: 0;\">Progress: </p>{bar_svg}</div>"
+        bar_div = f'<div id="progress-bar-container" style="width: 100%; padding: 0 1rem; display:flex; align-items: center; gap: 0.5rem;"><p style="white-space: nowrap; margin: 0;">Progress: </p>{bar_svg}</div>'
 
         return bar_div
-    
+
     def generate_energy(self, main_info):
         return f"<div id=\"energy\"><b>Energy:</b> {main_info['energy']}/{main_info['max_energy']}</div>"
-    
+
     def generate_skillpt(self, main_info):
-        return f"<div id=\"skill-pt\"><b>Skill Points:</b> {main_info['skillpt']:,}</div>"
+        return (
+            f"<div id=\"skill-pt\"><b>Skill Points:</b> {main_info['skillpt']:,}</div>"
+        )
 
     def generate_fans(self, main_info):
         return f"<div id=\"fans\"><b>Fans:</b> {main_info['fans']:,}</div>"
-    
+
     def generate_table(self, command_info, main_info):
         if not command_info:
             return ""
-        
-        headers = [TABLE_HEADERS['fac']]
-        if main_info['scenario_id'] == 7:
-            headers = [f"""<th style="text-overflow: clip;white-space: nowrap;overflow: hidden;">{header}</th>""" for header in headers]
+
+        headers = [TABLE_HEADERS["fac"]]
+        if main_info["scenario_id"] == 7:
+            headers = [
+                f"""<th style="text-overflow: clip;white-space: nowrap;overflow: hidden;">{header}</th>"""
+                for header in headers
+            ]
 
             # Use icons as headers
-            for command_id in list(main_info['all_commands'].keys())[:5]:
-                color_block_part = f"<div style=\"width: 100%;height: 100%;background-color: {constants.UAF_COLOR_DICT[str(command_id)[1]]};position: absolute;top: 0;left: 0;z-index: -1\"></div>"
-                img_part = f"<img src=\"{util.get_uaf_sport_image_dict()[str(command_id)]}\" width=\"32\" height=\"32\" style=\"display:inline-block; width: auto; height: 1.5rem; margin-top: 1px;\"/>"
-                text_part = f"<br>{TABLE_HEADERS[constants.COMMAND_ID_TO_KEY[command_id]]}"
+            for command_id in list(main_info["all_commands"].keys())[:5]:
+                color_block_part = f'<div style="width: 100%;height: 100%;background-color: {constants.UAF_COLOR_DICT[str(command_id)[1]]};position: absolute;top: 0;left: 0;z-index: -1"></div>'
+                img_part = f'<img src="{util.get_uaf_sport_image_dict()[str(command_id)]}" width="32" height="32" style="display:inline-block; width: auto; height: 1.5rem; margin-top: 1px;"/>'
+                text_part = (
+                    f"<br>{TABLE_HEADERS[constants.COMMAND_ID_TO_KEY[command_id]]}"
+                )
                 header = f"""<th style="position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem; min-width:50px">{color_block_part}{img_part}{text_part}</th>"""
                 headers.append(header)
 
         else:
             headers += [TABLE_HEADERS[command] for command in command_info]
-            headers = [f"""<th style="text-overflow: clip;white-space: nowrap;overflow: hidden;">{header}</th>""" for header in headers]
+            headers = [
+                f"""<th style="text-overflow: clip;white-space: nowrap;overflow: hidden;">{header}</th>"""
+                for header in headers
+            ]
 
-
-        table_header = ''.join(headers)
+        table_header = "".join(headers)
         table = [f"<tr>{table_header}</tr>"]
-
+        logger.debug(f"COMMAND INFO: {command_info}")
         for row in self.initialized_rows:
             if not row.disabled:
                 table.append(row.to_tr(command_info))
 
         thead = f"<thead>{table[0]}</thead>"
         tbody = f"<tbody>{''.join(table[1:])}</tbody>"
-        return f"<table id=\"training-table\">{thead}{tbody}</table>"
+        return f'<table id="training-table">{thead}{tbody}</table>'
 
     def generate_bonds(self, main_info, display_type):
-        eval_dict = main_info['eval_dict']
+        eval_dict = main_info["eval_dict"]
         ids = []
         for key in eval_dict.keys():
-            if self.settings.hide_support_bonds.value and eval_dict[key].starting_bond == 100:
+            if (
+                self.settings.hide_support_bonds.value
+                and eval_dict[key].starting_bond == 100
+            ):
                 continue
 
             if key < 100:
                 ids.append(key)
-            elif key == 102 and main_info['scenario_id'] not in (6,):  # Filter out non-cards except Akikawa
+            elif key == 102 and main_info["scenario_id"] not in (
+                6,
+            ):  # Filter out non-cards except Akikawa
                 ids.append(key)
-        
+
         if not ids:
             return ""
-    
+
         ids = sorted(ids)
 
         partners = []
@@ -353,7 +385,7 @@ class Preset():
                     break
                 bond_color = color
 
-            img = f"<img src=\"{partner.img}\" width=\"56\" height=\"56\" style=\"display:inline-block;\"/>"
+            img = f'<img src="{partner.img}" width="56" height="56" style="display:inline-block;"/>'
             bond_ele = ""
             if display_type in (2, 3):
                 # Bars
@@ -368,85 +400,93 @@ class Preset():
         <div style="position: absolute;width:2px;height:100%;background-color:#4A494B;top:0px;left:80%;transform: translateX(-50%);"></div>
         <div style="position: absolute;width:100%;height:100%;border: 2px solid #4A494B;box-sizing: content-box;left: -2px;top: -2px;border-radius: 1rem;"></div>
     </div>
-</div>""".replace("\n", "").replace("    ", "")
+</div>""".replace(
+                    "\n", ""
+                ).replace(
+                    "    ", ""
+                )
             if display_type in (1, 3):
                 # Numbers
-                bond_ele += f"<p style=\"margin:0;padding:0;color:{bond_color};font-weight:bold;\">{partner.starting_bond}</p>"
-            
-            ele = f"<div style=\"display:flex;flex-direction:column;align-items:center;gap:0.2rem;\">{img}{bond_ele}</div>"
-            partners.append(ele)
-        
-        inner = ''.join(partners)
+                bond_ele += f'<p style="margin:0;padding:0;color:{bond_color};font-weight:bold;">{partner.starting_bond}</p>'
 
-        return f"<div id=\"support-bonds\" style=\"max-width: 100vw; display: flex; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap:0.3rem;\">{inner}</div>"
+            ele = f'<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;">{img}{bond_ele}</div>'
+            partners.append(ele)
+
+        inner = "".join(partners)
+
+        return f'<div id="support-bonds" style="max-width: 100vw; display: flex; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap:0.3rem;">{inner}</div>'
 
     def generate_gm_table(self, main_info):
-        if main_info['scenario_id'] != 5:
+        if main_info["scenario_id"] != 5:
             return ""
-        
-        header = "<tr><th colspan=\"8\">Fragments</th></tr>"
-    
+
+        header = '<tr><th colspan="8">Fragments</th></tr>'
+
         frag_tds = []
-        for index, fragment_id in enumerate(main_info['gm_fragments']):
-            frag_tds.append(f"<td style=\"{'outline: 1px solid red; outline-offset: -1px;' if index in (0, 4) else ''}\"><img src=\"{self.gm_fragment_dict[fragment_id]}\" height=\"32\" width=\"30\" style=\"display:block; margin: auto; width: auto; height: 32px;\" /></td>")
-        
+        for index, fragment_id in enumerate(main_info["gm_fragments"]):
+            frag_tds.append(
+                f"<td style=\"{'outline: 1px solid red; outline-offset: -1px;' if index in (0, 4) else ''}\"><img src=\"{self.gm_fragment_dict[fragment_id]}\" height=\"32\" width=\"30\" style=\"display:block; margin: auto; width: auto; height: 32px;\" /></td>"
+            )
+
         frag_tr = f"<tr>{''.join(frag_tds)}</tr>"
 
-        return f"<table id=\"gm-fragments\"><thead>{header}</thead><tbody>{frag_tr}</tbody></table>"
+        return f'<table id="gm-fragments"><thead>{header}</thead><tbody>{frag_tr}</tbody></table>'
 
     def generate_gl_table(self, main_info):
-        if main_info['scenario_id'] != 3:
+        if main_info["scenario_id"] != 3:
             return ""
-        
+
         top_row = []
         bottom_row = []
 
         for token_type in constants.GL_TOKEN_LIST:
-            top_row.append(f"<th><img src=\"{self.gl_token_dict[token_type]}\" height=\"32\" width=\"31\" style=\"display:block; margin: auto; width: auto; height: 32px;\" /></th>")
+            top_row.append(
+                f'<th><img src="{self.gl_token_dict[token_type]}" height="32" width="31" style="display:block; margin: auto; width: auto; height: 32px;" /></th>'
+            )
             bottom_row.append(f"<td>{main_info['gl_stats'][token_type]}</td>")
-        
+
         top_row = f"<tr>{''.join(top_row)}</tr>"
         bottom_row = f"<tr>{''.join(bottom_row)}</tr>"
 
-        return f"<table id=\"gl-tokens\"><thead>{top_row}</thead><tbody>{bottom_row}</tbody></table>"
-    
+        return f'<table id="gl-tokens"><thead>{top_row}</thead><tbody>{bottom_row}</tbody></table>'
+
     def generate_schedule(self, main_info):
-        cur_turn = main_info['turn']
+        cur_turn = main_info["turn"]
         next_race = None
-        for race in main_info['scheduled_races']:
-            if race['turn'] >= cur_turn:
+        for race in main_info["scheduled_races"]:
+            if race["turn"] >= cur_turn:
                 next_race = race
                 break
-        
+
         if not next_race:
             return ""
-        
-        turns_left = next_race['turn'] - cur_turn
+
+        turns_left = next_race["turn"] - cur_turn
         text = f"<p><b>{turns_left} turn{'' if turns_left == 1 else 's'}</b> until</p>"
         img = f"<img width=100 height=50 src=\"{next_race['thumb_url']}\"/>"
 
         fan_warning = ""
 
-        if main_info['fans'] < next_race['fans']:
-            fans_needed = next_race['fans'] - main_info['fans']
+        if main_info["fans"] < next_race["fans"]:
+            fans_needed = next_race["fans"] - main_info["fans"]
             fan_warning = f"""<p style="color: orange; margin: 0;"><b>{fans_needed} more</b> fans needed!</p>"""
 
         return f"""<div id="schedule" style="display: flex; flex-direction: column; justify-content: center; align-items: center;"><div id="schedule-race-container" style="display: flex; align-items: center; gap: 0.5rem;">{text}{img}</div>{fan_warning}</div>"""
 
     def generate_arc(self, main_info):
-        if main_info['scenario_id'] != 6 or main_info['turn'] < 3:
+        if main_info["scenario_id"] != 6 or main_info["turn"] < 3:
             return ""
 
-        gauge_str = str(main_info['arc_expectation_gauge'] // 10)
-        gauge_str2 = str(main_info['arc_expectation_gauge'] % 10)
+        gauge_str = str(main_info["arc_expectation_gauge"] // 10)
+        gauge_str2 = str(main_info["arc_expectation_gauge"] % 10)
         return f"<div id=\"arc\"><b>Aptitude Points:</b> {main_info['arc_aptitude_points']:,} - <b>Supporter Points:</b> {main_info['arc_supporter_points']:,} - <b>Expectation Gauge:</b> {gauge_str}.{gauge_str2}%</div>"
 
     def generate_uaf(self, main_info):
-        if main_info['scenario_id'] != 7:
+        if main_info["scenario_id"] != 7:
             return ""
-        
+
         required_rank_to_effect = {
-            -1: 17, # Janky hack for UAF end
+            -1: 17,  # Janky hack for UAF end
             0: 0,
             10: 0,
             20: 3,
@@ -454,36 +494,38 @@ class Preset():
             40: 12,
             50: 17,
         }
-        
-        uaf_sport_rank = main_info['uaf_sport_ranks']
-        uaf_sport_rank_total = main_info['uaf_sport_rank_total']
-        uaf_current_required_rank = main_info['uaf_current_required_rank']
-        uaf_current_active_effects = main_info['uaf_current_active_effects']
-        uaf_current_active_bonus = main_info['uaf_current_active_bonus']
-        uaf_sport_competition = main_info['uaf_sport_competition']
-        uaf_consultations_left = main_info['uaf_consultations_left']
+
+        uaf_sport_rank = main_info["uaf_sport_ranks"]
+        uaf_sport_rank_total = main_info["uaf_sport_rank_total"]
+        uaf_current_required_rank = main_info["uaf_current_required_rank"]
+        uaf_current_active_effects = main_info["uaf_current_active_effects"]
+        uaf_current_active_bonus = main_info["uaf_current_active_bonus"]
+        uaf_sport_competition = main_info["uaf_sport_competition"]
+        uaf_consultations_left = main_info["uaf_consultations_left"]
 
         html_output = "<div id='uaf'><div style='display:flex; flex-flow: row; justify-content:center; gap: 0.5rem;'>"
 
         flex_divs = []
-        
+
         if uaf_current_required_rank >= 0:
             flex_divs.append(f"""<b>Training Target:</b> {uaf_current_required_rank}""")
         flex_divs.append(f"""<b>Total Bonus:</b> {uaf_current_active_bonus}%""")
         flex_divs.append(f"""<b>Wins:</b> {uaf_sport_competition}""")
         flex_divs.append(f"""<b>Calls left:</b> {uaf_consultations_left}""")
-        
-        flex_divs = [f"""<p style="margin: 0 0 0.1rem 0">{div}</p>""" for div in flex_divs]
-        html_output += ''.join(flex_divs)
+
+        flex_divs = [
+            f"""<p style="margin: 0 0 0.1rem 0">{div}</p>""" for div in flex_divs
+        ]
+        html_output += "".join(flex_divs)
         html_output += "</div>"
-            
+
         html_output += "<table style='margin-left: 52px;'><thead><tr><th style='position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem; min-width:101px'>Genres</th>"
-        
-        for command_id in list(main_info['all_commands'].keys())[:5]:
+
+        for command_id in list(main_info["all_commands"].keys())[:5]:
             text_part = f"{TABLE_HEADERS[constants.COMMAND_ID_TO_KEY[command_id]]}"
             header = f"""<th style="position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem; min-width:50px">{text_part}</th>"""
             html_output += header
-            
+
         html_output += "<th style='position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem;'>Bonus</th></tr></thead><tbody>"
 
         # Loop through the IDs
@@ -495,9 +537,9 @@ class Preset():
                 if id in uaf_sport_rank:
                     rank = uaf_sport_rank.get(id, 0)
                     total_row += rank
-                    
+
                     # Determine the color based on the rank
-                    if rank >= uaf_current_required_rank+10:
+                    if rank >= uaf_current_required_rank + 10:
                         style = f"color:{Colors.GREAT.value}; font-weight:600;"
                     elif rank >= uaf_current_required_rank:
                         style = f"color:{Colors.GOOD.value}; font-weight:600;"
@@ -505,24 +547,26 @@ class Preset():
                         style = f"color:{Colors.WARNING.value}; font-weight:600;"
                     else:
                         style = f"color:{Colors.ALERT.value}; font-weight:600;"
-                    
+
                     # Color bg if the sport is available
-                    if id in main_info['all_commands']:
+                    if id in main_info["all_commands"]:
                         # 🤮
                         bg_color = constants.UAF_COLOR_DICT[str(id)[1]]
                         bg_color = bg_color.split(",")
                         bg_color[-1] = "0.2)"
                         bg_color = ",".join(bg_color)
                         style += f"background-color: {bg_color};"
-                    
+
                     row += f"""<td style='{style}'>{rank}</td>"""
 
             current_effect_value = uaf_current_active_effects.get(str(base)[1], 0)
-            expected_effect_value = required_rank_to_effect.get(uaf_current_required_rank, 0)
+            expected_effect_value = required_rank_to_effect.get(
+                uaf_current_required_rank, 0
+            )
 
             # Determine the color for the effect value
             if current_effect_value == expected_effect_value:
-                effect_style = f"color:{Colors.GOOD.value}; font-weight:600;" 
+                effect_style = f"color:{Colors.GOOD.value}; font-weight:600;"
             else:
                 effect_style = f"color:{Colors.WARNING.value};"
 
@@ -532,14 +576,130 @@ class Preset():
         html_output += "</tbody></table></div>"
 
         return html_output
-        
+
+    def generate_sharp(self, main_info):
+        show_sharp = 1
+        if not show_sharp:
+            return ""
+
+        sharp_1 = main_info["sharp_1"]
+        sharp_2 = main_info["sharp_2"]
+
+        html_output = "<div style='display:flex; flex-flow: row; justify-content:center; gap: 0.5rem;' id='sharp'>"
+
+        flex_divs = []
+        if sharp_1:
+            checkbox_div = f"<div>切れ者/Sharp<input type='checkbox' style='accent-color:yellow' checked disabled></div>"
+        else:
+            checkbox_div = f"<div>切れ者/Sharp<input type='checkbox' style='accent-color:yellow'  disabled></div>"
+        if sharp_2:
+            checkbox_div2 = f"<div>切れ者/Sharp<input type='checkbox' style='accent-color:yellow' checked  disabled> </div>"
+        else:
+            checkbox_div2 = f"<div>切れ者/Sharp<input type='checkbox' style='accent-color:yellow'  disabled></div>"
+
+        flex_divs.append(checkbox_div)
+        flex_divs.append(checkbox_div2)
+
+        html_output += "".join(flex_divs)
+        html_output += "</div>"
+        return html_output
+
+    def generate_stats_ref(self, main_info):
+        rows = {}
+        df_turn = 0
+        average_stats = [0, 0, 0, 0, 0, 0, 0]
+
+        try:
+            rows[1] = pd.read_csv("appdata/training_logs/ref1.csv")
+            rows[2] = pd.read_csv("appdata/training_logs/ref2.csv")
+            rows[3] = pd.read_csv("appdata/training_logs/ref3.csv ")
+            # rows[4] = pd.read_csv("appdata/training_logs/ref4.csv")
+            # rows[5] = pd.read_csv("appdata/training_logs/ref5.csv")
+
+        except:
+            return ""
+
+        html_output = "<table style='margin-left: 52px;'><thead><tr>"
+
+        for command_id in list(main_info["all_commands"].keys())[:5]:
+            text_part = f"{TABLE_HEADERS[constants.COMMAND_ID_TO_KEY[command_id]]}"
+            header = f"""<th style="position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem; min-width:50px">{text_part}</th>"""
+            html_output += header
+
+        for header in ["SP", "Total"]:
+            html_output += f"""<th style="position: relative; text-overflow: clip;white-space: nowrap;overflow: hidden; z-index: 0; font-size: 0.8rem; min-width:50px">{header}</th>"""
+        html_output += "</tr></thead><tbody>"
+        for section in [25, 37, 49, 61, 73]:
+            if section >= main_info["turn"]:
+                df_turn = section
+                break
+
+        for row_number in range(1, 4):
+            try:
+                ref_speed = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "SPD"
+                ].to_numpy()[0]
+                ref_stamina = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "STA"
+                ].to_numpy()[0]
+                ref_power = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "POW"
+                ].to_numpy()[0]
+                ref_guts = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "GUT"
+                ].to_numpy()[0]
+                ref_int = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "INT"
+                ].to_numpy()[0]
+                ref_sp = rows[row_number][rows[row_number]["Turn"] == df_turn][:1][
+                    "SKLPT"
+                ].to_numpy()[0]
+                ref_total = (
+                    ref_speed
+                    + ref_stamina
+                    + ref_power
+                    + ref_guts
+                    + ref_int
+                    + ref_sp
+                    + ref_sp
+                )
+                html_output += f"""<tr><td>{ref_speed}</td><td>{ref_stamina}</td><td>{ref_power}</td><td>{ref_guts}</td><td>{ref_int}</td><td>{ref_sp}</td><td>{ref_total}</td></tr>"""
+
+                average_stats = [
+                    curr_stat + new_stat
+                    for curr_stat, new_stat in zip(
+                        average_stats,
+                        [
+                            ref_speed,
+                            ref_stamina,
+                            ref_power,
+                            ref_guts,
+                            ref_int,
+                            ref_sp,
+                            ref_total,
+                        ],
+                    )
+                ]
+            except Exception as e:
+                logger.error("ERROR:", e)
+                pass
+        average_stats = [stat / 3 for stat in average_stats]
+        html_output += f"""<tr style='background-color:red'><td>{average_stats[0]}</td><td>{average_stats[1]}</td><td>{average_stats[2]}</td><td>{average_stats[3]}</td><td>{average_stats[4]}</td><td>{average_stats[5]}</td><td>{average_stats[6]}</td></tr>"""
+        html_output += "</tbody></table></div>"
+
+        return html_output
+
     def to_dict(self):
         return {
             "name": self.name,
             "settings": self.settings.to_dict(),
-            "rows": [row.to_dict(self.row_types) for row in self.initialized_rows] if self.initialized_rows else []
+            "rows": (
+                [row.to_dict(self.row_types) for row in self.initialized_rows]
+                if self.initialized_rows
+                else []
+            ),
         }
-    
+
     def from_dict(self, preset_dict):
         if "name" in preset_dict:
             self.name = preset_dict["name"]
